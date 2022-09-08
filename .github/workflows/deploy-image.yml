@@ -37,6 +37,9 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@c84f38281176d4c9cdb1626ffafcd6b3911b5d94
         with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
           context: .
           push: true
           tags: latest
