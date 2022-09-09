@@ -38,6 +38,8 @@ fi
 
 hostname="-hostname $(hostname -f)"
 
+chown -R root:hak5 /mnt/efs_data && chmod -R 0770 /mnt/efs_data
+
 echo "Using the following settings:" $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
 
 exec su-exec hak5 /app/c2_amd64_linux $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
