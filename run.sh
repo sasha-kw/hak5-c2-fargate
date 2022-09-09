@@ -40,5 +40,5 @@ hostname="-hostname $(hostname -f)"
 
 echo "Using the following settings:" $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
 
-/app/c2_amd64_linux $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
+exec su-exec hak5 /app/c2_amd64_linux $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
 
