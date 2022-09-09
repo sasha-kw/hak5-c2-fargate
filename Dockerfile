@@ -14,10 +14,9 @@ RUN apk add ca-certificates wget unzip libc6-compat nfs-utils efs-utils su-exec\
     && chown -R hak5:hak5 /app/ \
     && chmod -R 0700 /app/ \
     && mkdir -p /mnt/efs_data \
-    && setcap CAP_NET_BIND_SERVICE=+eip /app/c2_amd64_linux \
     && apk del wget unzip
 
-EXPOSE 443 2022
+EXPOSE 8080 2022
 
 ENTRYPOINT ["/bin/sh"]
 
