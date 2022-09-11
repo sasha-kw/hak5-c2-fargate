@@ -1,6 +1,6 @@
 #### Deployment:
 
-- Deploy VPC.vaml
+- Deploy VPC.yaml
 - Deploy EFS.yaml
 - Deploy fargate.yaml
 - Validate domain for certificate
