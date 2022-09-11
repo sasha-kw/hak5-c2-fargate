@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: "Template to set up EFS and deploy a mount target into our VPC."
+Mappings:
+  AZRegions:
+    ap-northeast-1:
+      AZs: ["a", "b"]
+    ap-northeast-2:
+      AZs: ["a", "b"]
+    ap-south-1:
+      AZs: ["a", "b"]
+    ap-southeast-1:
+      AZs: ["a", "b"]
+    ap-southeast-2:
+      AZs: ["a", "b"]
+    ca-central-1:
+      AZs: ["a", "b"]
+    eu-central-1:
+      AZs: ["a", "b"]
+    eu-west-1:
+      AZs: ["a", "b"]
+    eu-west-2:
+      AZs: ["a", "b"]
+    sa-east-1:
+      AZs: ["a", "b"]
+    us-east-1:
+      AZs: ["a", "b"]
+    us-east-2:
+      AZs: ["a", "b"]
+    us-west-1:
+      AZs: ["a", "b"]
+    us-west-2:
+      AZs: ["a", "b"]
+
+Parameters:
+  SubnetId:
+    Description: 'Use the private subnet VPCId created by the VPC template.'
+    Type: AWS::EC2::Subnet::Id
+  VPCId:
+    Description: 'Use the VPCId that was created by the VPC template.'
+    Type: AWS::EC2::VPC::Id
+  ContainerSubnet:
+    Type: String
+    Default: '10.0.0.0/24'
+
+Resources:
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Allow inbound on port 2049 from container subnet'
+      GroupName: 'hak5-c2-efs-sg'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: !Ref ContainerSubnet
+      VpcId: !Ref VPCId
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      AvailabilityZoneName:
+        Fn::Sub:
+          - "${AWS::Region}${AZ}"
+          - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+      PerformanceMode: generalPurpose
+      BackupPolicy:
+        Status: ENABLED
+      Encrypted: true
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_7_DAYS
+        - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+      FileSystemTags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  MountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref SubnetId
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+Outputs:
+  MountTargetResource:
+    Description: "File System ID"
+    Value:
+      Ref: "FileSystem"

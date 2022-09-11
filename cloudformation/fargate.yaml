@@ -1,0 +1,255 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: 'Template to deploy Hak5 C2 container onto Fargate.'
+Parameters:
+  CPU:
+    Type: Number
+    AllowedValues:
+      - 256
+      - 512
+      - 1028
+      - 2056
+      - 4096
+    Default: 256
+  Memory:
+    Type: String
+    AllowedValues:
+      - '0.5GB'
+      - '1GB'
+      - '2GB'
+      - '3GB'
+      - '4GB'
+      - '5GB'
+      - '6GB'
+      - '7GB'
+      - '8GB'
+    Default: '0.5GB'
+  VPC:
+    Description: 'Use the VPCId that was created by the VPC template.'
+    Type: AWS::EC2::VPC::Id
+  Subnet:
+    Description: 'Use the public SubnetID that was created by the VPC template.'
+    Type: AWS::EC2::Subnet::Id
+  CIDR:
+    Type: String
+    Default: '10.0.0.0/16'
+  Image:
+    Type: String
+    Default: 'ghcr.io/sasha-kw/hak5-c2-fargate:master'
+  EFSFileSystemID:
+    Description: 'Use the EFSFileSystemId that was created by the EFS template.'
+    Type: String
+    Default: ''
+  ServiceName:
+    Type: String
+    Default: 'hak5-c2'
+  ContainerPort:
+    Type: Number
+    Default: 8080
+  AppliancePort:
+    Type: Number
+    Default: 2022
+  Database:
+    Type: String
+    Default: '/mnt/efs_data/c2.db'
+  MountPoint:
+    Type: String
+    Default: '/mnt/efs_data/'
+  Hostname:
+    Description: 'Use the domain you will be using for the application e.g. c2.example.com'
+    Type: String
+    Default: ''
+
+Resources:
+  NetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Join ["-" , [!Ref 'AWS::StackName', NLB]]
+      Scheme: internet-facing
+      Subnets:
+        - !Ref Subnet
+      Type: network
+
+  NetworkLoadBalancerTargetGroupHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Join ["-" , [!Ref 'AWS::StackName', HTTPSTarget]]
+      Port: 8080
+      Protocol: TCP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: True
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 8080
+      HealthCheckProtocol: TCP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60
+      TargetType: ip
+
+  NetworkLoadBalancerTargetGroupSSH:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Join ["-" , [!Ref 'AWS::StackName', SSHTarget]]
+      Port: 2022
+      Protocol: TCP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: True
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 2022
+      HealthCheckProtocol: TCP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60
+      TargetType: ip
+
+  NetworkLoadBalancerListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NetworkLoadBalancerTargetGroupHTTPS
+      LoadBalancerArn: !Ref NetworkLoadBalancer
+      Port: '443'
+      Protocol: TLS
+      SslPolicy: ELBSecurityPolicy-FS-1-2-Res-2020-10
+      Certificates:
+        - CertificateArn: !Ref TLSCertificate
+
+  NetworkLoadBalancerListenerSSH:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions:
+          - Type: forward
+            TargetGroupArn: !Ref NetworkLoadBalancerTargetGroupSSH
+        LoadBalancerArn: !Ref NetworkLoadBalancer
+        Port: '2022'
+        Protocol: TCP
+
+  ListenerCertificate:
+    Type: AWS::ElasticLoadBalancingV2::ListenerCertificate
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref TLSCertificate
+      ListenerArn: !Ref NetworkLoadBalancerListenerHTTPS
+
+  TLSCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref Hostname
+      ValidationMethod: DNS
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ['', [!Ref ServiceName, ExecutionRole]] # USE SUB
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Join ['', [!Ref ServiceName, TaskDefinition]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref CPU
+      Memory: !Ref Memory
+      ExecutionRoleArn:
+        !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref Image
+          Environment:
+          - Name: "listenport"
+            Value: !Ref ContainerPort
+          - Name: "sshport"
+            Value: !Ref AppliancePort
+          - Name: "db"
+            Value: !Ref Database
+          MountPoints:
+            - ContainerPath: !Ref MountPoint
+              ReadOnly: 'False'
+              SourceVolume: !Join ['', [!Ref ServiceName, '-source-volume']]
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+            - ContainerPort: !Ref AppliancePort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: ecs
+      Volumes:
+       - Name: !Join ['', [!Ref ServiceName, '-source-volume']]
+         EFSVolumeConfiguration:
+           FilesystemId: !Ref EFSFileSystemID
+           RootDirectory: "/"
+           TransitEncryption: ENABLED
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join ['', [!Ref ServiceName, ContainerSecurityGroup]]
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          CidrIp: !Ref CIDR
+        - IpProtocol: tcp
+          FromPort: !Ref AppliancePort
+          ToPort: !Ref AppliancePort
+          CidrIp: !Ref CIDR
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - NetworkLoadBalancerListenerHTTPS
+      - NetworkLoadBalancerListenerSSH
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref Subnet
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+      LoadBalancers:
+        - TargetGroupArn:
+            !Ref NetworkLoadBalancerTargetGroupHTTPS
+          ContainerPort: !Ref ContainerPort
+          ContainerName: !Ref ServiceName
+        - TargetGroupArn:
+            !Ref NetworkLoadBalancerTargetGroupSSH
+          ContainerPort: !Ref AppliancePort
+          ContainerName: !Ref ServiceName
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition]]
+
+Outputs:
+  NetworkLoadBalancer:
+    Description: 'DNS name of the NLB to CNAME onto'
+    Value: !GetAtt NetworkLoadBalancer.DNSName
