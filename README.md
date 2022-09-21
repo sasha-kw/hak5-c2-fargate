@@ -1,8 +1,8 @@
 #### Deployment:
 
-- Deploy VPC.yaml
-- Deploy EFS.yaml
-- Deploy fargate.yaml
+- Deploy VPC.yml
+- Deploy EFS.yml
+- Deploy fargate.yml
 - Validate domain for certificate
 - Create CNAME in DNS
 - Done
