@@ -19,4 +19,4 @@
 
 #### Container Build:
 
-- A new container will be made on every push to the master branch as well as every week to ensure the image remains up to date.
+- A new container will be made on every push to the master branch as well as every night to ensure the image remains up to date.
