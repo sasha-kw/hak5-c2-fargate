@@ -17,7 +17,7 @@ RUN apk add ca-certificates wget unzip libc6-compat nfs-utils efs-utils su-exec\
     && apk del wget unzip
 
 # fix for CVE-2022-3996
-RUN apk update libcrypto3@3.0.7-r2
+RUN apk add libcrypto3=3.0.7-r2
 
 EXPOSE 8080 2022
 
