@@ -19,4 +19,6 @@
 
 #### Container Build:
 
+[![Container build](https://github.com/sasha-kw/hak5-c2-fargate/actions/workflows/deploy-image.yml/badge.svg)](https://github.com/sasha-kw/hak5-c2-fargate/actions/workflows/deploy-image.yml)
+
 - A new container will be made on every push to the master branch as well as every night to ensure the image remains up to date.
