@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.18.3
 
 RUN adduser -D -g 'hak5' hak5 \
     && mkdir /app
